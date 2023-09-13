@@ -104,41 +104,41 @@ jobs:
             --no-fail-on-empty-changeset \
             --role-arn ${TESTING_CLOUDFORMATION_EXECUTION_ROLE}
 
-  build-and-package-testing:
-    if: github.ref == 'refs/heads/dev-hemant-demo'
-    needs: [test]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: aws-actions/setup-sam@v2
-        with:
-          use-installer: true
+  # build-and-package-testing:
+  #   if: github.ref == 'refs/heads/dev-hemant-demo'
+  #   needs: [test]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: aws-actions/setup-sam@v2
+  #       with:
+  #         use-installer: true
 
-      - name: Build resources
-        run: sam build --template ${SAM_TEMPLATE} --use-container
+  #     - name: Build resources
+  #       run: sam build --template ${SAM_TEMPLATE} --use-container
 
-      - name: Assume the testing pipeline user role
-        uses: aws-actions/configure-aws-credentials@v1-node16
-        with:
-          aws-region: ${{ env.TESTING_REGION }}
-          role-to-assume: ${{ env.TESTING_PIPELINE_EXECUTION_ROLE }}
-          role-session-name: testing-packaging
-          role-duration-seconds: 3600
-          role-skip-session-tagging: true
+  #     - name: Assume the testing pipeline user role
+  #       uses: aws-actions/configure-aws-credentials@v1-node16
+  #       with:
+  #         aws-region: ${{ env.TESTING_REGION }}
+  #         role-to-assume: ${{ env.TESTING_PIPELINE_EXECUTION_ROLE }}
+  #         role-session-name: testing-packaging
+  #         role-duration-seconds: 3600
+  #         role-skip-session-tagging: true
 
-      - name: Upload artifacts to testing artifact buckets
-        run: |
-          sam package \
-            --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
-            --region ${TESTING_REGION} \
-            --output-template-file packaged-testing.yaml
+  #     - name: Upload artifacts to testing artifact buckets
+  #       run: |
+  #         sam package \
+  #           --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
+  #           --region ${TESTING_REGION} \
+  #           --output-template-file packaged-testing.yaml
 
-      - uses: actions/upload-artifact@v3
-        with:
-          name: packaged-testing.yaml
-          path: packaged-testing.yaml
+  #     - uses: actions/upload-artifact@v3
+  #       with:
+  #         name: packaged-testing.yaml
+  #         path: packaged-testing.yaml
       
-  build-and-package-prod:
+  build-and-deploy-prod:
     if: github.ref == 'refs/heads/master'
     needs: [test]
     runs-on: ubuntu-latest
@@ -147,6 +147,8 @@ jobs:
       - uses: aws-actions/setup-sam@v2
         with:
           use-installer: true
+      - run: sam build --template ${SAM_TEMPLATE} --use-container
+
       - name: Assume the prod pipeline user role
         uses: aws-actions/configure-aws-credentials@v1-node16
         with:
@@ -156,39 +158,53 @@ jobs:
           role-duration-seconds: 3600
           role-skip-session-tagging: true
 
-      - name: Upload artifacts to production artifact buckets
+      - name: Deploy to feature stack in the production account
+        shell: bash
         run: |
-          sam package \
-            --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
+          sam deploy --stack-name $({PROD_STACK_NAME}) \
+            --capabilities CAPABILITY_IAM \
             --region ${PROD_REGION} \
-            --output-template-file packaged-prod.yaml
+            --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
+            --no-fail-on-empty-changeset \
+            --role-arn ${PROD_CLOUDFORMATION_EXECUTION_ROLE}
+  
+
+      # - name: Assume the prod pipeline user role
+      #   uses: aws-actions/configure-aws-credentials@v1-node16
+      #   with:
+      #     aws-region: ${{ env.PROD_REGION }}
+      #     role-to-assume: ${{ env.PROD_PIPELINE_EXECUTION_ROLE }}
+      #     role-session-name: prod-packaging
+      #     role-duration-seconds: 3600
+      #     role-skip-session-tagging: true
+
+
+      # - run: sam package --template-file template.yaml --region ${PROD_REGION} --s3-bucket ${PROD_ARTIFACTS_BUCKET} -- 
+      #        output-template-file output-template.yml
+            
+      # - run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --stack-name ${PROD_STACK_NAME} --s3-bucket ${PROD_ARTIFACTS_BUCKET} --capabilities CAPABILITY_IAM --region ${PROD_REGION} --role-arn ${PROD_CLOUDFORMATION_EXECUTION_ROLE}
+      # # - name: Upload artifacts to production artifact buckets
+      # #   run: |
+      #     sam package \
+      #       --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
+      #       --region ${PROD_REGION} \
+      #       --output-template-file packaged-prod.yaml
 
       # - uses: actions/upload-artifact@v3
       #   with:
       #     name: packaged-prod.yaml
       #     path: packaged-prod.yaml
 
-  integration-test:
-      if: github.ref == 'refs/heads/dev-hemant-demo'
-      needs: [deploy-testing]
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v3
-        - run: |
-            # trigger the integration tests here
-
-  deploy-testing:
+  build-and-deploy-dev:
     if: github.ref == 'refs/heads/dev-hemant-demo'
-    needs: [build-and-package-testing]
+    needs: [test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: aws-actions/setup-sam@v2
         with:
           use-installer: true
-      - uses: actions/download-artifact@v3
-        with:
-          name: packaged-testing.yaml
+      - run: sam build --template ${SAM_TEMPLATE} --use-container
 
       - name: Assume the testing pipeline user role
         uses: aws-actions/configure-aws-credentials@v1-node16
@@ -199,15 +215,56 @@ jobs:
           role-duration-seconds: 3600
           role-skip-session-tagging: true
 
-      - name: Deploy to testing account
+      - name: Deploy to feature stack in the testing account
+        shell: bash
         run: |
           sam deploy --stack-name ${TESTING_STACK_NAME} \
-            --template packaged-testing.yaml \
             --capabilities CAPABILITY_IAM \
             --region ${TESTING_REGION} \
             --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
             --no-fail-on-empty-changeset \
             --role-arn ${TESTING_CLOUDFORMATION_EXECUTION_ROLE}
+
+  # integration-test:
+  #     if: github.ref == 'refs/heads/dev-hemant-demo'
+  #     needs: [deploy-testing]
+  #     runs-on: ubuntu-latest
+  #     steps:
+  #       - uses: actions/checkout@v3
+  #       - run: |
+  #           # trigger the integration tests here
+
+  # deploy-testing:
+  #   if: github.ref == 'refs/heads/dev-hemant-demo'
+  #   needs: [build-and-package-testing]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: aws-actions/setup-sam@v2
+  #       with:
+  #         use-installer: true
+  #     - uses: actions/download-artifact@v3
+  #       with:
+  #         name: packaged-testing.yaml
+
+  #     - name: Assume the testing pipeline user role
+  #       uses: aws-actions/configure-aws-credentials@v1-node16
+  #       with:
+  #         aws-region: ${{ env.TESTING_REGION }}
+  #         role-to-assume: ${{ env.TESTING_PIPELINE_EXECUTION_ROLE }}
+  #         role-session-name: testing-deployment
+  #         role-duration-seconds: 3600
+  #         role-skip-session-tagging: true
+
+  #     - name: Deploy to testing account
+  #       run: |
+  #         sam deploy --stack-name ${TESTING_STACK_NAME} \
+  #           --template packaged-testing.yaml \
+  #           --capabilities CAPABILITY_IAM \
+  #           --region ${TESTING_REGION} \
+  #           --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
+  #           --no-fail-on-empty-changeset \
+  #           --role-arn ${TESTING_CLOUDFORMATION_EXECUTION_ROLE}
   
   # integration-prod:
   #   if: github.ref == 'refs/heads/master'
@@ -219,40 +276,40 @@ jobs:
   #         # trigger the integration tests here
   
 
-  deploy-prod:
-    if: github.ref == 'refs/heads/master'
-    needs: [build-and-package-prod]
-    runs-on: ubuntu-latest
-    # Configure GitHub Action Environment to have a manual approval step before deployment to production
-    # https://docs.github.com/en/actions/reference/environments
-    # environment: <configured-environment>
-    steps:
-      - uses: actions/checkout@v3
-      - uses: aws-actions/setup-sam@v2
-        with:
-          use-installer: true
-      - uses: actions/download-artifact@v3
-        with:
-          name: packaged-prod.yaml
+  # deploy-prod:
+  #   if: github.ref == 'refs/heads/master'
+  #   needs: [build-and-package-prod]
+  #   runs-on: ubuntu-latest
+  #   # Configure GitHub Action Environment to have a manual approval step before deployment to production
+  #   # https://docs.github.com/en/actions/reference/environments
+  #   # environment: <configured-environment>
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: aws-actions/setup-sam@v2
+  #       with:
+  #         use-installer: true
+  #     - uses: actions/download-artifact@v3
+  #       with:
+  #         name: packaged-prod.yaml
 
-      - name: Assume the prod pipeline user role
-        uses: aws-actions/configure-aws-credentials@v1-node16
-        with:
-          aws-region: ${{ env.PROD_REGION }}
-          role-to-assume: ${{ env.PROD_PIPELINE_EXECUTION_ROLE }}
-          role-session-name: prod-deployment
-          role-duration-seconds: 3600
-          role-skip-session-tagging: true
+  #     - name: Assume the prod pipeline user role
+  #       uses: aws-actions/configure-aws-credentials@v1-node16
+  #       with:
+  #         aws-region: ${{ env.PROD_REGION }}
+  #         role-to-assume: ${{ env.PROD_PIPELINE_EXECUTION_ROLE }}
+  #         role-session-name: prod-deployment
+  #         role-duration-seconds: 3600
+  #         role-skip-session-tagging: true
 
-      - name: Deploy to production account
-        run: |
-          sam deploy --stack-name ${PROD_STACK_NAME} \
-            --template packaged-prod.yaml \
-            --capabilities CAPABILITY_IAM \
-            --region ${PROD_REGION} \
-            --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
-            --no-fail-on-empty-changeset \
-            --role-arn ${PROD_CLOUDFORMATION_EXECUTION_ROLE}
+  #     - name: Deploy to production account
+  #       run: |
+  #         sam deploy --stack-name ${PROD_STACK_NAME} \
+  #           --template packaged-prod.yaml \
+  #           --capabilities CAPABILITY_IAM \
+  #           --region ${PROD_REGION} \
+  #           --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
+  #           --no-fail-on-empty-changeset \
+  #           --role-arn ${PROD_CLOUDFORMATION_EXECUTION_ROLE}
 
 #   build-deploy:
 #     if: github.ref == 'refs/heads/master'
