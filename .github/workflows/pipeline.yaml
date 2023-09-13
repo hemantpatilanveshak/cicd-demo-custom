@@ -161,7 +161,7 @@ jobs:
       - name: Deploy to feature stack in the production account
         shell: bash
         run: |
-          sam deploy --stack-name $({PROD_STACK_NAME}) \
+          sam deploy --guided --stack-name $({PROD_STACK_NAME}) \
             --capabilities CAPABILITY_IAM \
             --region ${PROD_REGION} \
             --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
