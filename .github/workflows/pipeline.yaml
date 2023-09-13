@@ -168,6 +168,15 @@ jobs:
           name: packaged-prod.yaml
           path: packaged-prod.yaml
 
+  integration-test:
+      if: github.ref == 'refs/heads/dev-hemant-demo'
+      needs: [deploy-testing]
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v3
+        - run: |
+            # trigger the integration tests here
+
   deploy-testing:
     if: github.ref == 'refs/heads/dev-hemant-demo'
     needs: [build-and-package-testing]
@@ -199,16 +208,15 @@ jobs:
             --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
             --no-fail-on-empty-changeset \
             --role-arn ${TESTING_CLOUDFORMATION_EXECUTION_ROLE}
-
-  integration-test:
-    if: github.ref == 'refs/heads/dev-hemant-demo'
-    needs: [deploy-testing]
+  
+  integration-prod:
+    if: github.ref == 'refs/heads/master'
+    needs: [deploy-prod]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - run: |
           # trigger the integration tests here
-  
   
 
   deploy-prod:
@@ -245,12 +253,3 @@ jobs:
             --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
             --no-fail-on-empty-changeset \
             --role-arn ${PROD_CLOUDFORMATION_EXECUTION_ROLE}
-
-  integration-prod:
-    if: github.ref == 'refs/heads/master'
-    needs: [deploy-prod]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: |
-          # trigger the integration tests here
