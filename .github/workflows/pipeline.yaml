@@ -5,6 +5,7 @@ on:
     branches:
       - 'master'
       - 'feature**'
+      -  dev-hemant-demo
   delete:
     branches:
       - 'feature**'
