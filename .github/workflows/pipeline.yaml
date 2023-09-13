@@ -209,14 +209,14 @@ jobs:
             --no-fail-on-empty-changeset \
             --role-arn ${TESTING_CLOUDFORMATION_EXECUTION_ROLE}
   
-  integration-prod:
-    if: github.ref == 'refs/heads/master'
-    needs: [deploy-prod]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: |
-          # trigger the integration tests here
+  # integration-prod:
+  #   if: github.ref == 'refs/heads/master'
+  #   needs: [deploy-prod]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - run: |
+  #         # trigger the integration tests here
   
 
   deploy-prod:
@@ -253,3 +253,29 @@ jobs:
             --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
             --no-fail-on-empty-changeset \
             --role-arn ${PROD_CLOUDFORMATION_EXECUTION_ROLE}
+
+#   build-deploy:
+#     if: github.ref == 'refs/heads/master'
+#     needs: [test]
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v3
+#       - uses: aws-actions/setup-sam@v2
+#         with:
+#           use-installer: true
+#       - name: Assume the prod pipeline user role
+#         uses: aws-actions/configure-aws-credentials@v1-node16
+#         with:
+#           aws-region: ${{ env.PROD_REGION }}
+#           role-to-assume: ${{ env.PROD_PIPELINE_EXECUTION_ROLE }}
+#           role-session-name: prod-packaging
+#           role-duration-seconds: 3600
+#           role-skip-session-tagging: true
+        
+#       # sam build 
+#       - run: sam build --use-container
+
+# # Run Unit tests- Specify unit tests here 
+
+# # sam deploy
+#       - run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --stack-name sam-hello-world --s3-bucket ##s3-bucket## --capabilities CAPABILITY_IAM --region ##region##
